@@ -8,15 +8,15 @@ public class MyBot : IChessBot
     int[] pieceValues = { 0, 100, 325, 325, 550, 1000, 50000 };
     int[] victimScore = { 0, 100, 200, 300, 400, 500, 600 };
 
-    static int maxDepth = 3;
+    static int maxDepth = 5;
     static uint PVTableSize = 100000;
     KeyValuePair<ulong, Move>[] PVTable = new KeyValuePair<ulong, Move>[PVTableSize + 2];
     Move[] PVArray = new Move[maxDepth];
 
     int[,] searchHistory = new int[13, 64];
-    int[,] searchKillers = new int[2, maxDepth];
-    int searchPly = 0;
+    Move[,] searchKillers = new Move[2, maxDepth + 1];
     int searchNodes = 0;
+    int initPly = 0;
 
     int[,] MvvLvaScores = new int[13, 13];
 
@@ -29,6 +29,7 @@ public class MyBot : IChessBot
 
     public Move Think(Board board, Timer timer)
     {
+        initPly = board.PlyCount;
         history.Add(board.ZobristKey);
         Move bestMove = SearchPosition(board, timer);
 
@@ -91,12 +92,11 @@ public class MyBot : IChessBot
         {
             for (int j = 0; j < maxDepth; j++)
             {
-                searchKillers[i, j] = 0;
+                searchKillers[i, j] = Move.NullMove;
             }
         }
 
         PVTable = new KeyValuePair<ulong, Move>[PVTableSize + 2];
-        searchPly = 0;
         searchNodes = 0;
     }
 
@@ -171,12 +171,74 @@ public class MyBot : IChessBot
         return bestMove;
     }
 
+    int Quiescence(int alpha, int beta, Board board)
+    {
+        int searchPly = board.PlyCount - initPly;
+        if (IsRepetition(board))
+            return 0;
+
+        if (searchPly > maxDepth)
+            return GetBoardScore(board);
+
+        int boardScore = GetBoardScore(board);
+
+        if (boardScore >= beta)
+            return beta;
+
+        if (boardScore > alpha)
+            alpha = boardScore;
+
+        Move[] moves = board.GetLegalMoves(true);
+        int oldAlpha = alpha;
+        Move bestMove = Move.NullMove;
+        Move PVMove = ProbePVTable(board);
+
+        KeyValuePair<Move, int>[] moveListScores = new KeyValuePair<Move, int>[moves.Length];
+        for (int i = 0; i < moves.Length; i++)
+        {
+            Move move = moves[i];
+            int score = 0;
+            if (move.IsCapture)
+                score = MvvLvaScores[(int)move.CapturePieceType, (int)move.MovePieceType] + 1000000;
+            else if (searchKillers[0, searchPly] == move)
+                score = 900000;
+            else if (searchKillers[1, searchPly] == move)
+                score = 800000;
+            else
+                score = searchHistory[(int)move.MovePieceType, move.TargetSquare.Index];
+
+            moveListScores[i] = new KeyValuePair<Move, int>(move, score);
+        }
+
+        for (int i = 0; i < moveListScores.Length; i++)
+        {
+            PickNextMove(i, ref moveListScores);
+            Move move = moveListScores[i].Key;
+
+            board.MakeMove(move);
+            int score = -Quiescence(-beta, -alpha, board);
+            board.UndoMove(move);
+
+            if (score > alpha)
+            {
+                if (score >= beta)
+                    return beta;
+                alpha = score;
+                bestMove = move;
+            }
+        }
+
+        if (alpha != oldAlpha)
+            StorePVMove(board, bestMove);
+
+        return alpha;
+    }
+
     int AlphaBeta(int alpha, int beta, int depth, Board board, Timer timer)
     {
-        searchNodes++;
-
+        int searchPly = board.PlyCount - initPly;
         if (depth == 0 || timer.MillisecondsElapsedThisTurn >= 1000)
-            return GetBoardScore(board);
+            return Quiescence(alpha, beta, board);
 
         if (IsRepetition(board))
             return 0;
@@ -184,13 +246,35 @@ public class MyBot : IChessBot
         Move[] moves = board.GetLegalMoves();
         int oldAlpha = alpha;
         Move bestMove = Move.NullMove;
+        Move PVMove = ProbePVTable(board);
 
         KeyValuePair<Move, int>[] moveListScores = new KeyValuePair<Move, int>[moves.Length];
         for (int i = 0; i < moves.Length; i++)
         {
             Move move = moves[i];
-            int score = move.IsCapture ? MvvLvaScores[(int)move.CapturePieceType, (int)move.MovePieceType] : 0;
+            int score = 0;
+            if (move.IsCapture)
+                score = MvvLvaScores[(int)move.CapturePieceType, (int)move.MovePieceType] + 1000000;
+            else if (searchKillers[0, searchPly] == move)
+                score = 900000;
+            else if (searchKillers[1, searchPly] == move)
+                score = 800000;
+            else
+                score = searchHistory[(int)move.MovePieceType, move.TargetSquare.Index];
+
             moveListScores[i] = new KeyValuePair<Move, int>(move, score);
+        }
+
+        if (PVMove != Move.NullMove)
+        {
+            for (int i = 0; i < moveListScores.Length; i++)
+            {
+                if (moveListScores[i].Key == PVMove)
+                {
+                    moveListScores[i] = new KeyValuePair<Move, int>(PVMove, 2000000);
+                    break;
+                }
+            }
         }
 
         if (moves.Length == 0)
@@ -211,10 +295,21 @@ public class MyBot : IChessBot
             {
                 if (score >= beta)
                 {
+                    if (!move.IsCapture)
+                    {
+                        searchKillers[1, searchPly] = searchKillers[0, searchPly];
+                        searchKillers[0, searchPly] = move;
+                    }
+
                     return beta;
                 }
                 alpha = score;
                 bestMove = move;
+
+                if (!move.IsCapture)
+                {
+                    searchHistory[(int)move.MovePieceType, move.TargetSquare.Index] += depth;
+                }
             }
         }
 
