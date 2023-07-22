@@ -43,17 +43,12 @@ public class MyBot : IChessBot
 
             while (move != Move.NullMove && count < depth)
             {
-                if (board.GetLegalMoves().Contains(move))
-                {
-                    movesToUndo.Insert(0, move);
-                    board.MakeMove(move);
-                    PVArray[count++] = move;
-                }
-                else
-                {
+                if (!board.GetLegalMoves().Contains(move))
                     break;
-                }
 
+                movesToUndo.Insert(0, move);
+                board.MakeMove(move);
+                PVArray[count++] = move;
                 move = ProbePVTable(board);
             }
 
