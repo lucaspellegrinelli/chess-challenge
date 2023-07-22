@@ -60,11 +60,11 @@ public class MyBot : IChessBot
     {
         int searchPly = board.PlyCount - initPly;
 
+        if (board.IsDraw())
+            return 999999999;
+
         if (!isQuiescence && (depth == 0 || timer.MillisecondsElapsedThisTurn >= 1000))
             return QuiescenceOrAlphaBeta(alpha, beta, depth, board, timer, true);
-
-        if (board.IsDraw())
-            return -99999999;
 
         if (isQuiescence)
         {
@@ -160,9 +160,7 @@ public class MyBot : IChessBot
                 bestMove = move;
 
                 if (!isQuiescence && !move.IsCapture)
-                {
                     searchHistory[(int)move.MovePieceType, move.TargetSquare.Index] += depth;
-                }
             }
         }
 
