@@ -30,31 +30,9 @@ public class MyBot : IChessBot
 
         ClearForSearch(board);
         for (int depth = 1; depth <= maxDepth; depth++)
-        {
             QuiescenceOrAlphaBeta(-99999999, 999999999, depth, board, timer, false);
 
-            // ---------- GetPVLine ---------- //
-            Move move = ProbePVTable(board);
-            List<Move> movesToUndo = new();
-
-            int count = 0;
-            while (move != Move.NullMove && count < depth)
-            {
-                if (!board.GetLegalMoves().Contains(move))
-                    break;
-
-                movesToUndo.Insert(0, move);
-                board.MakeMove(move);
-                PVArray[count++] = move;
-                move = ProbePVTable(board);
-            }
-
-            foreach (Move moveToUndo in movesToUndo)
-                board.UndoMove(moveToUndo);
-            // ---------- GetPVLine ---------- //
-        }
-
-        return PVArray[0];
+        return ProbePVTable(board);
     }
 
     void InitMvvLva()
