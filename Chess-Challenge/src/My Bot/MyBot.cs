@@ -8,17 +8,16 @@ public class MyBot : IChessBot
     int[] pieceValues = { 0, 100, 325, 325, 550, 1000, 50000 };
 
     static int maxDepth = 5;
-    static uint PVTableSize = 100000;
-    KeyValuePair<ulong, Move>[] PVTable = new KeyValuePair<ulong, Move>[PVTableSize + 2];
     Move[] PVArray = new Move[maxDepth];
 
-    int[,] searchHistory = new int[13, 64];
-    Move[,] searchKillers = new Move[2, maxDepth + 1];
+    static uint PVTableSize = 100000;
+    KeyValuePair<ulong, Move>[] PVTable = new KeyValuePair<ulong, Move>[PVTableSize + 2];
+
     int initPly = 0;
 
     int[,] MvvLvaScores = new int[13, 13];
-
-    List<ulong> history = new();
+    int[,] searchHistory = new int[13, 64];
+    Move[,] searchKillers = new Move[2, maxDepth + 1];
 
     public MyBot()
     {
@@ -28,7 +27,6 @@ public class MyBot : IChessBot
     public Move Think(Board board, Timer timer)
     {
         initPly = board.PlyCount;
-        history.Add(board.ZobristKey);
 
         ClearForSearch(board);
         for (int depth = 1; depth <= maxDepth; depth++)
@@ -56,11 +54,7 @@ public class MyBot : IChessBot
             // ---------- GetPVLine ---------- //
         }
 
-        Move bestMove = PVArray[0];
-        board.MakeMove(bestMove);
-        history.Add(board.ZobristKey);
-
-        return bestMove;
+        return PVArray[0];
     }
 
     void InitMvvLva()
