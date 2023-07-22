@@ -15,7 +15,6 @@ public class MyBot : IChessBot
 
     int[,] searchHistory = new int[13, 64];
     Move[,] searchKillers = new Move[2, maxDepth + 1];
-    int searchNodes = 0;
     int initPly = 0;
 
     int[,] MvvLvaScores = new int[13, 13];
@@ -31,8 +30,39 @@ public class MyBot : IChessBot
     {
         initPly = board.PlyCount;
         history.Add(board.ZobristKey);
-        Move bestMove = SearchPosition(board, timer);
 
+        ClearForSearch(board);
+        for (int depth = 1; depth <= maxDepth; depth++)
+        {
+            AlphaBeta(-99999999, 999999999, depth, board, timer);
+
+            // ---------- GetPVLine ---------- //
+            Move move = ProbePVTable(board);
+            List<Move> movesToUndo = new();
+            int count = 0;
+
+            while (move != Move.NullMove && count < depth)
+            {
+                if (board.GetLegalMoves().Contains(move))
+                {
+                    movesToUndo.Insert(0, move);
+                    board.MakeMove(move);
+                    PVArray[count++] = move;
+                }
+                else
+                {
+                    break;
+                }
+
+                move = ProbePVTable(board);
+            }
+
+            foreach (Move moveToUndo in movesToUndo)
+                board.UndoMove(moveToUndo);
+            // ---------- GetPVLine ---------- //
+        }
+
+        Move bestMove = PVArray[0];
         board.MakeMove(bestMove);
         history.Add(board.ZobristKey);
 
@@ -85,19 +115,11 @@ public class MyBot : IChessBot
             for (int j = 0; j < 64; j++)
             {
                 searchHistory[i, j] = 0;
-            }
-        }
-
-        for (int i = 0; i < 2; i++)
-        {
-            for (int j = 0; j < maxDepth; j++)
-            {
-                searchKillers[i, j] = Move.NullMove;
+                searchKillers[i % 2, j % maxDepth] = Move.NullMove;
             }
         }
 
         PVTable = new KeyValuePair<ulong, Move>[PVTableSize + 2];
-        searchNodes = 0;
     }
 
     void StorePVMove(Board board, Move move)
@@ -110,57 +132,9 @@ public class MyBot : IChessBot
     {
         uint index = (uint)board.ZobristKey % PVTableSize;
         if (PVTable[index].Key == board.ZobristKey)
-        {
             return PVTable[index].Value;
-        }
 
         return Move.NullMove;
-    }
-
-    int GetPVLine(Board board, int depth)
-    {
-        Move move = ProbePVTable(board);
-        List<Move> movesToUndo = new();
-        int count = 0;
-
-        while (move != Move.NullMove && count < depth)
-        {
-            if (board.GetLegalMoves().Contains(move))
-            {
-                movesToUndo.Insert(0, move);
-                board.MakeMove(move);
-                PVArray[count++] = move;
-            }
-            else
-            {
-                break;
-            }
-
-            move = ProbePVTable(board);
-        }
-
-        foreach (Move moveToUndo in movesToUndo)
-        {
-            board.UndoMove(moveToUndo);
-        }
-
-        return count;
-    }
-
-    Move SearchPosition(Board board, Timer timer)
-    {
-        Move bestMove = Move.NullMove;
-        int bestScore = int.MinValue;
-        ClearForSearch(board);
-
-        for (int depth = 1; depth <= maxDepth; depth++)
-        {
-            bestScore = AlphaBeta(-99999999, 999999999, depth, board, timer);
-            int pvMoves = GetPVLine(board, depth);
-            bestMove = PVArray[0];
-        }
-
-        return bestMove;
     }
 
     int Quiescence(int alpha, int beta, Board board)
@@ -269,10 +243,8 @@ public class MyBot : IChessBot
             }
         }
 
-        if (moves.Length == 0)
-        {
+        if (moveListScores.Length == 0)
             return board.IsInCheck() ? -100000 - depth : 0;
-        }
 
         for (int i = 0; i < moveListScores.Length; i++)
         {
@@ -299,16 +271,12 @@ public class MyBot : IChessBot
                 bestMove = move;
 
                 if (!move.IsCapture)
-                {
                     searchHistory[(int)move.MovePieceType, move.TargetSquare.Index] += depth;
-                }
             }
         }
 
         if (alpha != oldAlpha)
-        {
             StorePVMove(board, bestMove);
-        }
 
         return alpha;
     }
@@ -341,21 +309,13 @@ public class MyBot : IChessBot
         int distanceFromCenter = distanceFromCenterX + distanceFromCenterY;
 
         if (piece.IsKing)
-        {
             return distanceFromBackrank == 7 ? 0 : -70;
-        }
         else if (piece.IsQueen)
-        {
             return 0;
-        }
         else if (piece.IsRook)
-        {
             return distanceFromBackrank == 1 ? 25 : Math.Max(0, 10 - distanceFromCenter * 5);
-        }
         else if (piece.IsBishop || piece.IsKnight)
-        {
             return Math.Max(0, 20 - distanceFromCenter * 5);
-        }
         else if (piece.IsPawn)
         {
             int pawnDistance = distanceFromBackrank + distanceFromCenterX;
