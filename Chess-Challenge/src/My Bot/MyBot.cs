@@ -89,19 +89,6 @@ public class MyBot : IChessBot
         moveListScores[bestIndex] = temp;
     }
 
-    bool IsRepetition(Board board)
-    {
-        for (int i = 0; i < history.Count - 1; i++)
-        {
-            if (history[i] == board.ZobristKey)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     void ClearForSearch(Board board)
     {
         for (int i = 0; i < 13; i++)
@@ -134,7 +121,7 @@ public class MyBot : IChessBot
     int Quiescence(int alpha, int beta, Board board)
     {
         int searchPly = board.PlyCount - initPly;
-        if (IsRepetition(board))
+        if (board.IsDraw())
             return 0;
 
         if (searchPly > maxDepth)
@@ -200,7 +187,7 @@ public class MyBot : IChessBot
         if (depth == 0 || timer.MillisecondsElapsedThisTurn >= 1000)
             return Quiescence(alpha, beta, board);
 
-        if (IsRepetition(board))
+        if (board.IsDraw())
             return 0;
 
         Move[] moves = board.GetLegalMoves();
