@@ -18,13 +18,10 @@ namespace ChessChallenge.Example
         Move[] PVArray = new Move[maxDepth];
 
         int[,] searchHistory = new int[13, 64];
-        int[,] searchKillers = new int[2, maxDepth];
-        int searchPly = 0;
-        int searchNodes = 0;
+        Move[,] searchKillers = new Move[2, maxDepth + 1];
+        int initPly = 0;
 
         int[,] MvvLvaScores = new int[13, 13];
-
-        List<ulong> history = new();
 
         public EvilBot()
         {
@@ -33,21 +30,46 @@ namespace ChessChallenge.Example
 
         public Move Think(Board board, Timer timer)
         {
-            try
-            {
-                history.Add(board.ZobristKey);
-                Move bestMove = SearchPosition(board, timer);
+            initPly = board.PlyCount;
 
-                board.MakeMove(bestMove);
-                history.Add(board.ZobristKey);
-
-                return bestMove;
-            }
-            catch (Exception e)
+            ClearForSearch(board);
+            for (int depth = 1; depth <= maxDepth; depth++)
             {
-                Move[] moves = board.GetLegalMoves();
-                return moves[0];
+                AlphaBeta(-99999999, 999999999, depth, board, timer);
+
+                // ---------- GetPVLine ---------- //
+                Move move = ProbePVTable(board);
+                List<Move> movesToUndo = new();
+                int count = 0;
+
+                while (move != Move.NullMove && count < depth)
+                {
+                    if (board.GetLegalMoves().Contains(move))
+                    {
+                        movesToUndo.Insert(0, move);
+                        board.MakeMove(move);
+                        PVArray[count++] = move;
+                    }
+                    else
+                    {
+                        break;
+                    }
+
+                    move = ProbePVTable(board);
+                }
+
+                foreach (Move moveToUndo in movesToUndo)
+                    board.UndoMove(moveToUndo);
+                // ---------- GetPVLine ---------- //
             }
+
+            Move bestMove = PVArray[0];
+            if (bestMove.IsNull)
+            {
+                bestMove = board.GetLegalMoves().First();
+            }
+
+            return bestMove;
         }
 
         void InitMvvLva()
@@ -78,15 +100,7 @@ namespace ChessChallenge.Example
 
         bool IsRepetition(Board board)
         {
-            for (int i = 0; i < history.Count - 1; i++)
-            {
-                if (history[i] == board.ZobristKey)
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            return board.IsDraw();
         }
 
         void ClearForSearch(Board board)
@@ -96,20 +110,11 @@ namespace ChessChallenge.Example
                 for (int j = 0; j < 64; j++)
                 {
                     searchHistory[i, j] = 0;
-                }
-            }
-
-            for (int i = 0; i < 2; i++)
-            {
-                for (int j = 0; j < maxDepth; j++)
-                {
-                    searchKillers[i, j] = 0;
+                    searchKillers[i % 2, j % maxDepth] = Move.NullMove;
                 }
             }
 
             PVTable = new KeyValuePair<ulong, Move>[PVTableSize + 2];
-            searchPly = 0;
-            searchNodes = 0;
         }
 
         void StorePVMove(Board board, Move move)
@@ -122,85 +127,119 @@ namespace ChessChallenge.Example
         {
             uint index = (uint)board.ZobristKey % PVTableSize;
             if (PVTable[index].Key == board.ZobristKey)
-            {
                 return PVTable[index].Value;
-            }
 
             return Move.NullMove;
         }
 
-        int GetPVLine(Board board, int depth)
+        int Quiescence(int alpha, int beta, Board board)
         {
-            Move move = ProbePVTable(board);
-            List<Move> movesToUndo = new();
-            int count = 0;
+            int searchPly = board.PlyCount - initPly;
+            if (IsRepetition(board))
+                return -99999999;
 
-            while (move != Move.NullMove && count < depth)
-            {
-                if (board.GetLegalMoves().Contains(move))
-                {
-                    movesToUndo.Insert(0, move);
-                    board.MakeMove(move);
-                    PVArray[count++] = move;
-                }
-                else
-                {
-                    break;
-                }
-
-                move = ProbePVTable(board);
-            }
-
-            foreach (Move moveToUndo in movesToUndo)
-            {
-                board.UndoMove(moveToUndo);
-            }
-
-            return count;
-        }
-
-        Move SearchPosition(Board board, Timer timer)
-        {
-            Move bestMove = Move.NullMove;
-            int bestScore = int.MinValue;
-            ClearForSearch(board);
-
-            for (int depth = 1; depth <= maxDepth; depth++)
-            {
-                bestScore = AlphaBeta(-9999999, 99999999, depth, board, timer);
-                int pvMoves = GetPVLine(board, depth);
-                bestMove = PVArray[0];
-            }
-
-            return bestMove;
-        }
-
-        int AlphaBeta(int alpha, int beta, int depth, Board board, Timer timer)
-        {
-            searchNodes++;
-
-            if (depth == 0 || timer.MillisecondsElapsedThisTurn >= 1000)
+            if (searchPly > maxDepth)
                 return GetBoardScore(board);
 
-            if (IsRepetition(board))
-                return 0;
+            int boardScore = GetBoardScore(board);
 
-            Move[] moves = board.GetLegalMoves();
+            if (boardScore >= beta)
+                return beta;
+
+            if (boardScore > alpha)
+                alpha = boardScore;
+
+            Move[] moves = board.GetLegalMoves(true);
             int oldAlpha = alpha;
             Move bestMove = Move.NullMove;
+            Move PVMove = ProbePVTable(board);
 
             KeyValuePair<Move, int>[] moveListScores = new KeyValuePair<Move, int>[moves.Length];
             for (int i = 0; i < moves.Length; i++)
             {
                 Move move = moves[i];
-                int score = move.IsCapture ? MvvLvaScores[(int)move.CapturePieceType, (int)move.MovePieceType] : 0;
+                int score = 0;
+                if (move.IsCapture)
+                    score = MvvLvaScores[(int)move.CapturePieceType, (int)move.MovePieceType] + 1000000;
+                else if (searchKillers[0, searchPly] == move)
+                    score = 900000;
+                else if (searchKillers[1, searchPly] == move)
+                    score = 800000;
+                else
+                    score = searchHistory[(int)move.MovePieceType, move.TargetSquare.Index];
+
                 moveListScores[i] = new KeyValuePair<Move, int>(move, score);
             }
 
-            if (moves.Length == 0)
+            for (int i = 0; i < moveListScores.Length; i++)
             {
-                return board.IsInCheck() ? -100000 - depth : 0;
+                PickNextMove(i, ref moveListScores);
+                Move move = moveListScores[i].Key;
+
+                board.MakeMove(move);
+                int score = -Quiescence(-beta, -alpha, board);
+                board.UndoMove(move);
+
+                if (score > alpha)
+                {
+                    if (score >= beta)
+                        return beta;
+                    alpha = score;
+                    bestMove = move;
+                }
             }
+
+            if (alpha != oldAlpha)
+                StorePVMove(board, bestMove);
+
+            return alpha;
+        }
+
+        int AlphaBeta(int alpha, int beta, int depth, Board board, Timer timer)
+        {
+            int searchPly = board.PlyCount - initPly;
+            if (depth == 0 || timer.MillisecondsElapsedThisTurn >= 1000)
+                return Quiescence(alpha, beta, board);
+
+            if (IsRepetition(board))
+                return -99999999;
+
+            Move[] moves = board.GetLegalMoves();
+            int oldAlpha = alpha;
+            Move bestMove = Move.NullMove;
+            Move PVMove = ProbePVTable(board);
+
+            KeyValuePair<Move, int>[] moveListScores = new KeyValuePair<Move, int>[moves.Length];
+            for (int i = 0; i < moves.Length; i++)
+            {
+                Move move = moves[i];
+                int score = 0;
+                if (move.IsCapture)
+                    score = MvvLvaScores[(int)move.CapturePieceType, (int)move.MovePieceType] + 1000000;
+                else if (searchKillers[0, searchPly] == move)
+                    score = 900000;
+                else if (searchKillers[1, searchPly] == move)
+                    score = 800000;
+                else
+                    score = searchHistory[(int)move.MovePieceType, move.TargetSquare.Index];
+
+                moveListScores[i] = new KeyValuePair<Move, int>(move, score);
+            }
+
+            if (PVMove != Move.NullMove)
+            {
+                for (int i = 0; i < moveListScores.Length; i++)
+                {
+                    if (moveListScores[i].Key == PVMove)
+                    {
+                        moveListScores[i] = new KeyValuePair<Move, int>(PVMove, 2000000);
+                        break;
+                    }
+                }
+            }
+
+            if (moveListScores.Length == 0)
+                return board.IsInCheck() ? -100000 - depth : 0;
 
             for (int i = 0; i < moveListScores.Length; i++)
             {
@@ -215,17 +254,24 @@ namespace ChessChallenge.Example
                 {
                     if (score >= beta)
                     {
+                        if (!move.IsCapture)
+                        {
+                            searchKillers[1, searchPly] = searchKillers[0, searchPly];
+                            searchKillers[0, searchPly] = move;
+                        }
+
                         return beta;
                     }
                     alpha = score;
                     bestMove = move;
+
+                    if (!move.IsCapture)
+                        searchHistory[(int)move.MovePieceType, move.TargetSquare.Index] += depth;
                 }
             }
 
             if (alpha != oldAlpha)
-            {
                 StorePVMove(board, bestMove);
-            }
 
             return alpha;
         }
@@ -258,21 +304,13 @@ namespace ChessChallenge.Example
             int distanceFromCenter = distanceFromCenterX + distanceFromCenterY;
 
             if (piece.IsKing)
-            {
                 return distanceFromBackrank == 7 ? 0 : -70;
-            }
             else if (piece.IsQueen)
-            {
                 return 0;
-            }
             else if (piece.IsRook)
-            {
                 return distanceFromBackrank == 1 ? 25 : Math.Max(0, 10 - distanceFromCenter * 5);
-            }
             else if (piece.IsBishop || piece.IsKnight)
-            {
                 return Math.Max(0, 20 - distanceFromCenter * 5);
-            }
             else if (piece.IsPawn)
             {
                 int pawnDistance = distanceFromBackrank + distanceFromCenterX;

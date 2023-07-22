@@ -8,8 +8,6 @@ public class MyBot : IChessBot
     int[] pieceValues = { 0, 100, 325, 325, 550, 1000, 50000 };
 
     static int maxDepth = 5;
-    Move[] PVArray = new Move[maxDepth];
-
     static uint PVTableSize = 100000;
     KeyValuePair<ulong, Move>[] PVTable = new KeyValuePair<ulong, Move>[PVTableSize + 2];
 
@@ -21,29 +19,16 @@ public class MyBot : IChessBot
 
     public MyBot()
     {
-        InitMvvLva();
+        for (int attacker = 1; attacker <= 6; attacker++)
+            for (int victim = 1; victim <= 6; victim++)
+                MvvLvaScores[victim, attacker] = victim * 100 + 6 - attacker;
     }
 
     public Move Think(Board board, Timer timer)
     {
         initPly = board.PlyCount;
 
-        ClearForSearch(board);
-        for (int depth = 1; depth <= maxDepth; depth++)
-            QuiescenceOrAlphaBeta(-99999999, 999999999, depth, board, timer, false);
-
-        return ProbePVTable(board);
-    }
-
-    void InitMvvLva()
-    {
-        for (int attacker = 1; attacker <= 6; attacker++)
-            for (int victim = 1; victim <= 6; victim++)
-                MvvLvaScores[victim, attacker] = victim * 100 + 6 - attacker;
-    }
-
-    void ClearForSearch(Board board)
-    {
+        // ---------- ClearForSearch ---------- //
         for (int i = 0; i < 13; i++)
         {
             for (int j = 0; j < 64; j++)
@@ -54,6 +39,12 @@ public class MyBot : IChessBot
         }
 
         PVTable = new KeyValuePair<ulong, Move>[PVTableSize + 2];
+        // ---------- ClearForSearch ---------- //
+
+        for (int depth = 1; depth <= maxDepth; depth++)
+            QuiescenceOrAlphaBeta(-99999999, 999999999, depth, board, timer, false);
+
+        return ProbePVTable(board);
     }
 
     Move ProbePVTable(Board board)
@@ -73,7 +64,7 @@ public class MyBot : IChessBot
             return QuiescenceOrAlphaBeta(alpha, beta, depth, board, timer, true);
 
         if (board.IsDraw())
-            return 0;
+            return -99999999;
 
         if (isQuiescence)
         {
