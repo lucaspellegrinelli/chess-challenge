@@ -6,7 +6,6 @@ using System.Linq;
 public class MyBot : IChessBot
 {
     int[] pieceValues = { 0, 100, 325, 325, 550, 1000, 50000 };
-    int[] victimScore = { 0, 100, 200, 300, 400, 500, 600 };
 
     static int maxDepth = 5;
     static uint PVTableSize = 100000;
@@ -68,7 +67,7 @@ public class MyBot : IChessBot
     {
         for (int attacker = (int)PieceType.Pawn; attacker <= (int)PieceType.King; attacker++)
             for (int victim = (int)PieceType.Pawn; victim <= (int)PieceType.King; victim++)
-                MvvLvaScores[victim, attacker] = victimScore[victim] + 6 - (victimScore[attacker] / 100);
+                MvvLvaScores[victim, attacker] = victim * 100 + 6 - attacker;
     }
 
     void PickNextMove(int moveNum, ref KeyValuePair<Move, int>[] moveListScores)
