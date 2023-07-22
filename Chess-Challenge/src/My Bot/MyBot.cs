@@ -155,17 +155,9 @@ public class MyBot : IChessBot
 
         for (int depth = 1; depth <= maxDepth; depth++)
         {
-            bestScore = AlphaBeta(-9999999, 99999999, depth, board, timer);
+            bestScore = AlphaBeta(-99999999, 999999999, depth, board, timer);
             int pvMoves = GetPVLine(board, depth);
             bestMove = PVArray[0];
-
-            Console.WriteLine($"[SearchPosition] Depth: {depth} Score: {bestScore} Move: {bestMove} Nodes: {searchNodes}");
-            Console.Write($" > PV: ");
-            for (int i = 0; i < pvMoves; i++)
-            {
-                Console.Write($"{PVArray[i]} ");
-            }
-            Console.WriteLine();
         }
 
         return bestMove;

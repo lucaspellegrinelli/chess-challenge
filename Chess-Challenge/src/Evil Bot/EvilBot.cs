@@ -33,13 +33,21 @@ namespace ChessChallenge.Example
 
         public Move Think(Board board, Timer timer)
         {
-            history.Add(board.ZobristKey);
-            Move bestMove = SearchPosition(board, timer);
+            try
+            {
+                history.Add(board.ZobristKey);
+                Move bestMove = SearchPosition(board, timer);
 
-            board.MakeMove(bestMove);
-            history.Add(board.ZobristKey);
+                board.MakeMove(bestMove);
+                history.Add(board.ZobristKey);
 
-            return bestMove;
+                return bestMove;
+            }
+            catch (Exception e)
+            {
+                Move[] moves = board.GetLegalMoves();
+                return moves[0];
+            }
         }
 
         void InitMvvLva()
@@ -162,14 +170,6 @@ namespace ChessChallenge.Example
                 bestScore = AlphaBeta(-9999999, 99999999, depth, board, timer);
                 int pvMoves = GetPVLine(board, depth);
                 bestMove = PVArray[0];
-
-                Console.WriteLine($"[SearchPosition] Depth: {depth} Score: {bestScore} Move: {bestMove} Nodes: {searchNodes}");
-                Console.Write($" > PV: ");
-                for (int i = 0; i < pvMoves; i++)
-                {
-                    Console.Write($"{PVArray[i]} ");
-                }
-                Console.WriteLine();
             }
 
             return bestMove;
