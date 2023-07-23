@@ -8,8 +8,7 @@ public class MyBot : IChessBot
     int[] pieceValues = { 0, 100, 325, 325, 550, 1000, 50000 };
 
     static int maxDepth = 5;
-    static uint PVTableSize = 100000;
-    KeyValuePair<ulong, Move>[] PVTable = new KeyValuePair<ulong, Move>[PVTableSize + 2];
+    Dictionary<ulong, Move> PVTable = new Dictionary<ulong, Move>();
 
     int initPly = 0;
 
@@ -38,26 +37,17 @@ public class MyBot : IChessBot
             }
         }
 
-        PVTable = new KeyValuePair<ulong, Move>[PVTableSize + 2];
+        PVTable.Clear();
         // ---------- ClearForSearch ---------- //
 
         Move bestMove = Move.NullMove;
         for (int depth = 1; depth <= maxDepth; depth++)
         {
             QuiescenceOrAlphaBeta(-99999999, 999999999, depth, board, timer, false);
-            bestMove = ProbePVTable(board);
+            bestMove = PVTable.GetValueOrDefault(board.ZobristKey, Move.NullMove);
         }
 
         return bestMove.IsNull ? board.GetLegalMoves()[0] : bestMove;
-    }
-
-    Move ProbePVTable(Board board)
-    {
-        uint index = (uint)board.ZobristKey % PVTableSize;
-        if (PVTable[index].Key == board.ZobristKey)
-            return PVTable[index].Value;
-
-        return Move.NullMove;
     }
 
     int QuiescenceOrAlphaBeta(int alpha, int beta, int depth, Board board, Timer timer, bool isQuiescence)
@@ -88,7 +78,7 @@ public class MyBot : IChessBot
         Move[] moves = board.GetLegalMoves(isQuiescence);
         int oldAlpha = alpha;
         Move bestMove = Move.NullMove;
-        Move PVMove = ProbePVTable(board);
+        Move PVMove = PVTable.GetValueOrDefault(board.ZobristKey, Move.NullMove);
 
         var moveListScores = new KeyValuePair<Move, int>[moves.Length];
         for (int i = 0; i < moves.Length; i++)
@@ -170,10 +160,8 @@ public class MyBot : IChessBot
         }
 
         if (alpha != oldAlpha)
-        {
-            uint index = (uint)board.ZobristKey % PVTableSize;
-            PVTable[index] = new KeyValuePair<ulong, Move>(board.ZobristKey, bestMove);
-        }
+            if (!PVTable.TryAdd(board.ZobristKey, bestMove))
+                PVTable[board.ZobristKey] = bestMove;
 
         return alpha;
     }
