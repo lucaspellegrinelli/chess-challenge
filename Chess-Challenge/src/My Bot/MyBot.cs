@@ -41,10 +41,14 @@ public class MyBot : IChessBot
         PVTable = new KeyValuePair<ulong, Move>[PVTableSize + 2];
         // ---------- ClearForSearch ---------- //
 
+        Move bestMove = Move.NullMove;
         for (int depth = 1; depth <= maxDepth; depth++)
+        {
             QuiescenceOrAlphaBeta(-99999999, 999999999, depth, board, timer, false);
+            bestMove = ProbePVTable(board);
+        }
 
-        return ProbePVTable(board);
+        return bestMove.IsNull ? board.GetLegalMoves()[0] : bestMove;
     }
 
     Move ProbePVTable(Board board)
@@ -63,7 +67,8 @@ public class MyBot : IChessBot
         if (board.IsDraw())
             return 999999999;
 
-        if (!isQuiescence && (depth == 0 || timer.MillisecondsElapsedThisTurn >= 1000))
+        int timeToPlay = (timer.MillisecondsRemaining <= 5000) ? 250 : 1000;
+        if (!isQuiescence && (depth == 0 || timer.MillisecondsElapsedThisTurn >= timeToPlay))
             return QuiescenceOrAlphaBeta(alpha, beta, depth, board, timer, true);
 
         if (isQuiescence)
