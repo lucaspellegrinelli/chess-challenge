@@ -9,7 +9,6 @@ public class MyBot : IChessBot
 
     static int maxDepth = 5;
     Dictionary<ulong, Move> PVTable = new Dictionary<ulong, Move>();
-
     int initPly = 0;
 
     int[,] MvvLvaScores = new int[13, 13];
@@ -190,22 +189,23 @@ public class MyBot : IChessBot
     {
         int distanceFromCenterX = (int)Math.Abs(square.File - 3.5);
         int distanceFromCenterY = (int)Math.Abs(square.Rank - 3.5);
-        int distanceFromBackrank = piece.IsWhite ? square.Rank : 7 - square.Rank;
+        int distanceFromBackrank = piece.IsWhite ? 7 - square.Rank : square.Rank;
         int distanceFromCenter = distanceFromCenterX + distanceFromCenterY;
+
+        if (piece.IsPawn)
+            return (distanceFromBackrank == 4 && distanceFromCenterX == 0) ? 60 : Math.Max(0, 20 - distanceFromBackrank * 5);
+
+        if (piece.IsBishop || piece.IsKnight)
+            return Math.Max(0, 20 - distanceFromCenter * 5);
+
+        if (piece.IsRook)
+            return distanceFromBackrank == 1 ? 25 : Math.Max(0, 10 - distanceFromCenter * 5);
+
+        if (piece.IsQueen)
+            return 0;
 
         if (piece.IsKing)
             return distanceFromBackrank == 7 ? 0 : -70;
-        else if (piece.IsQueen)
-            return 0;
-        else if (piece.IsRook)
-            return distanceFromBackrank == 1 ? 25 : Math.Max(0, 10 - distanceFromCenter * 5);
-        else if (piece.IsBishop || piece.IsKnight)
-            return Math.Max(0, 20 - distanceFromCenter * 5);
-        else if (piece.IsPawn)
-        {
-            int pawnDistance = distanceFromBackrank + distanceFromCenterX;
-            return distanceFromBackrank <= 5 ? Math.Max(0, 20 - pawnDistance * 5) : 0;
-        }
 
         return 0;
     }
